@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>حلبة النيون - الضربة القاضية</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700;900&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050508;
+            color: #fff;
+            font-family: 'Cairo', sans-serif;
+            overflow: hidden; /* منع التمرير */
+            user-select: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* واجهة المستخدم (UI) المتراكبة فوق الكانفاس */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* السماح للنقرات بالمرور للكانفاس إذا لزم الأمر */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* لوحة النتائج */
+        .scoreboard {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px 50px;
+            font-size: 2rem;
+            font-weight: 900;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .score-p1 { color: #ff00ff; text-shadow: 0 0 15px #ff00ff; }
+        .score-p2 {color: #00ffff; text-shadow: 0 0 15px #00ffff; }
+
+        /* شاشات القوائم (البداية / النهاية) */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 5, 8, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            transition: opacity 0.3s ease;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 4rem;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px #fff, 0 0 40px #00ffff, 0 0 60px #ff00ff;
+        }
+
+        p.subtitle {
+            font-size: 1.5rem;
+            color: #ccc;
+            margin-bottom: 40px;
+        }
+
+        .controls-info {
+            display: flex;
+            gap: 50px;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .ctrl-box {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .ctrl-box h3 { margin-top: 0; }
+        .kbd {
+            display: inline-block;
+            padding: 5px 10px;
+            background: #222;
+            border-radius: 5px;
+            border-bottom: 3px solid #111;
+            font-family: monospace;
+            margin: 5px;
+            color: #fff;
+        }
+
+        button {
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            font-family: inherit;
+            color: #fff;
+            background: linear-gradient(45deg, #00ffff, #ff00ff);
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+        }
+
+        /* زر العودة للرئيسية */
+        .return-btn {
+            margin-top: 20px;
+            padding: 12px 35px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            font-family: inherit;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+            display: none; /* مخفي افتراضياً */
+        }
+
+        .return-btn.visible {
+            display: block;
+            animation: pulse-glow 2s infinite;
+        }
+
+        .return-btn:hover {
+            background: #fff;
+            color: #050508;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.8);
+            border-color: #fff;
+            text-shadow: none;
+            transform: translateY(-3px) scale(1.05);
+        }
+
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 15px rgba(255, 255, 255, 0.2); }
+            50% { box-shadow: 0 0 25px rgba(255, 255, 255, 0.6); }
+            100% { box-shadow: 0 0 15px rgba(255, 255, 255, 0.2); }
+        }
+
+        #winner-text {
+            font-size: 3rem;
+            margin-bottom: 30px;
+            font-weight: 900;
+        }
+
+        /* إعدادات اللعبة */
+        .settings-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .input-field {
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #444;
+            color: #fff;
+            padding: 10px 15px;
+            font-size: 1.2rem;
+            border-radius: 10px;
+            font-family: inherit;
+            outline: none;
+            text-align: center;
+            transition: 0.2s;
+        }
+
+        .input-field:focus {
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+            border-color: #fff;
+        }
+
+        select.input-field {
+            cursor: pointer;
+        }
+        
+        select.input-field option {
+            background: #111;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- الكانفاس الخاص باللعبة -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- واجهة المستخدم المتراكبة -->
+    <div id="ui-layer">
+        <div class="scoreboard">
+            <div class="score-p1"><span id="name1-display">بنفسجي</span>: <span id="score1">0</span></div>
+            <div class="score-p2"><span id="name2-display">أزرق</span>: <span id="score2">0</span></div>
+        </div>
+    </div>
+
+    <!-- شاشة البداية -->
+    <div id="start-screen" class="screen">
+        <h1>حلبة النيون</h1>
+        <p class="subtitle">السرعة والضربة الخاطفة هي مفتاح الفوز!</p>
+
+        <div class="settings-group">
+            <input type="text" id="p1-name" class="input-field" placeholder="اسم اللاعب (بنفسجي)" style="border-color: #ff00ff;">
+            <select id="target-score" class="input-field" style="border-color: #fff;">
+                <option value="5" selected>الفوز من 5 جولات</option>
+                <option value="7">الفوز من 7 جولات</option>
+                <option value="10">الفوز من 10 جولات</option>
+            </select>
+            <input type="text" id="p2-name" class="input-field" placeholder="اسم اللاعب (أزرق)" style="border-color: #00ffff;">
+        </div>
+        
+        <div class="controls-info">
+            <div class="ctrl-box" style="border-color: #ff00ff; box-shadow: 0 0 15px rgba(255,0,255,0.2);">
+                <h3 style="color: #ff00ff;">بنفسجي</h3>
+                <p>الحركة: <span class="kbd">الأسهم</span></p>
+                <p>الهجوم/الاندفاع: <span class="kbd">Enter</span></p>
+            </div>
+            <div class="ctrl-box" style="border-color: #00ffff; box-shadow: 0 0 15px rgba(0,255,255,0.2);">
+                <h3 style="color: #00ffff;">أزرق</h3>
+                <p>الحركة: <span class="kbd">W</span> <span class="kbd">A</span> <span class="kbd">S</span> <span class="kbd">D</span></p>
+                <p>الهجوم/الاندفاع: <span class="kbd">Space</span></p>
+            </div>
+        </div>
+
+        <button id="start-btn">ابدأ المعركة</button>
+    </div>
+
+    <!-- شاشة نهاية الجولة -->
+    <div id="round-screen" class="screen hidden" style="background: rgba(5,5,8,0.7);">
+        <div id="winner-text">فاز اللاعب 1!</div>
+        <p>الجولة التالية تبدأ قريباً...</p>
+        <button id="return-home-btn" class="return-btn">العودة للشاشة الرئيسية</button>
+    </div>
+
+    <script>
+        // إعداد الكانفاس
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height;
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // متغيرات اللعبة
+        let gameState = 'START'; // START, PLAYING, ROUND_OVER
+        let score = { p1: 0, p2: 0 };
+        let screenShakeTime = 0;
+        let targetScore = 10;
+
+        // نظام تتبع الأزرار لتجنب مشكلة الـ Ghosting
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            // منع السكرول عند ضغط المسطرة أو الأسهم
+            if(["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(e.code)) {
+                e.preventDefault();
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        // كلاس اللاعب
+        class Player {
+            constructor(x, y, color, controls, name) {
+                this.startX = x;
+                this.startY = y;
+                this.x = x;
+                this.y = y;
+                this.radius = 20;
+                this.color = color;
+                this.controls = controls;
+                this.name = name;
+                
+                this.dx = 0;
+                this.dy = 0;
+                this.speed = 0.5;
+                this.friction = 0.88;
+                this.maxSpeed = 7;
+                
+                // متغيرات الاندفاع (Dash Attack)
+                this.isDashing = false;
+                this.dashSpeed = 22;
+                this.dashDuration = 12; // بالـ frames
+                this.dashTimer = 0;
+                this.dashCooldown = 60; // وقت الانتظار بين كل اندفاع
+                this.cooldownTimer = 0;
+
+                // لحفظ التأثير البصري للحركة
+                this.history = []; 
+            }
+
+            reset() {
+                this.x = this.startX;
+                this.y = this.startY;
+                this.dx = 0;
+                this.dy = 0;
+                this.isDashing = false;
+                this.dashTimer = 0;
+                this.cooldownTimer = 0;
+                this.history = [];
+            }
+
+            update() {
+                if (gameState !== 'PLAYING') return;
+
+                // تقليل عداد الانتظار
+                if (this.cooldownTimer > 0) this.cooldownTimer--;
+
+                // منطق الحركة إذا لم يكن منفعاً
+                if (!this.isDashing) {
+                    let moveX = 0;
+                    let moveY = 0;
+
+                    if (keys[this.controls.up]) moveY -= 1;
+                    if (keys[this.controls.down]) moveY += 1;
+                    if (keys[this.controls.left]) moveX -= 1;
+                    if (keys[this.controls.right]) moveX += 1;
+
+                    // تطبيع الحركة المائلة (حتى لا يكون أسرع عند التحرك بالزاوية)
+                    if (moveX !== 0 && moveY !== 0) {
+                        const length = Math.hypot(moveX, moveY);
+                        moveX /= length;
+                        moveY /= length;
+                    }
+
+                    this.dx += moveX * this.speed;
+                    this.dy += moveY * this.speed;
+
+                    // تطبيق الاحتكاك
+                    this.dx *= this.friction;
+                    this.dy *= this.friction;
+
+                    // تحديد السرعة القصوى
+                    const currentSpeed = Math.hypot(this.dx, this.dy);
+                    if (currentSpeed > this.maxSpeed) {
+                        this.dx = (this.dx / currentSpeed) * this.maxSpeed;
+                        this.dy = (this.dy / currentSpeed) * this.maxSpeed;
+                    }
+
+                    // تفعيل الاندفاع
+                    if (keys[this.controls.attack] && this.cooldownTimer === 0 && (Math.abs(this.dx) > 0.5 || Math.abs(this.dy) > 0.5)) {
+                        this.isDashing = true;
+                        this.dashTimer = this.dashDuration;
+                        this.cooldownTimer = this.dashCooldown;
+                        
+                        // توجيه الاندفاع بنفس اتجاه الحركة الحالي
+                        const dashDir = Math.hypot(this.dx, this.dy);
+                        this.dx = (this.dx / dashDir) * this.dashSpeed;
+                        this.dy = (this.dy / dashDir) * this.dashSpeed;
+
+                        createDashRing(this.x, this.y, this.color);
+                    }
+                } else {
+                    // منطق أثناء الاندفاع
+                    this.dashTimer--;
+                    // إنشاء تأثير جزيئات أثناء الاندفاع
+                    if (Math.random() > 0.3) createParticles(this.x, this.y, this.color, 2, 0.5);
+
+                    if (this.dashTimer <= 0) {
+                        this.isDashing = false;
+                        // تقليل السرعة بعد الاندفاع
+                        this.dx *= 0.2;
+                        this.dy *= 0.2;
+                    }
+                }
+
+                // تحديث الموقع
+                this.x += this.dx;
+                this.y += this.dy;
+
+                // حفظ الأثر البصري
+                this.history.push({ x: this.x, y: this.y });
+                if (this.history.length > 10) this.history.shift();
+
+                // حدود الشاشة (ارتداد)
+                if (this.x - this.radius < 0) { this.x = this.radius; this.dx *= -0.5; }
+                if (this.x + this.radius > width) { this.x = width - this.radius; this.dx *= -0.5; }
+                if (this.y - this.radius < 0) { this.y = this.radius; this.dy *= -0.5; }
+                if (this.y + this.radius > height) { this.y = height - this.radius; this.dy *= -0.5; }
+            }
+
+            draw() {
+                // رسم الأثر (Trail)
+                ctx.beginPath();
+                for (let i = 0; i < this.history.length; i++) {
+                    const point = this.history[i];
+                    ctx.lineTo(point.x, point.y);
+                }
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = this.radius * 0.8;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.globalAlpha = 0.3;
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+
+                // تأثير التوهج النيون
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = this.color;
+
+                // رسم اللاعب الأساسي
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = '#111'; // قلب داكن
+                ctx.fill();
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = this.isDashing ? '#fff' : this.color; // أبيض عند الاندفاع
+                ctx.stroke();
+
+                // رسم مؤشر الجاهزية (دائرة خارجية تظهر عند اكتمال الـ Cooldown)
+                if (this.cooldownTimer === 0 && !this.isDashing) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI * 2);
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = this.color;
+                    ctx.globalAlpha = 0.5 + Math.sin(Date.now() / 100) * 0.3; // وميض
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
+                }
+
+                ctx.shadowBlur = 0; // إعادة تعيين التوهج
+            }
+        }
+
+        // كلاس الجزيئات (للانفجارات والتأثيرات)
+        class Particle {
+            constructor(x, y, color, speedMultiplier = 1) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = (Math.random() * 5 + 2) * speedMultiplier;
+                this.dx = Math.cos(angle) * velocity;
+                this.dy = Math.sin(angle) * velocity;
+                this.radius = Math.random() * 3 + 1;
+                this.life = 1.0;
+                this.decay = Math.random() * 0.03 + 0.015;
+            }
+
+            update() {
+                this.x += this.dx;
+                this.y += this.dy;
+                this.life -= this.decay;
+            }
+
+            draw() {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        // كلاس لحلقة الاندفاع البصرية
+        class DashRing {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.radius = 20;
+                this.life = 1.0;
+            }
+            update() {
+                this.radius += 5;
+                this.life -= 0.05;
+            }
+            draw() {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        // إعداد اللاعبين
+        const player1 = new Player(width - 100, height/2, '#ff00ff', {
+            up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', attack: 'Enter'
+        }, 'اللاعب 1');
+
+        const player2 = new Player(100, height/2, '#00ffff', {
+            up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', attack: 'Space'
+        }, 'اللاعب 2');
+
+        function updatePlayerPositionsOnResize() {
+             if (gameState === 'START') {
+                 player1.startX = width - 100; player1.startY = height/2;
+                 player2.startX = 100; player2.startY = height/2;
+                 player1.reset(); player2.reset();
+             }
+        }
+        window.addEventListener('resize', updatePlayerPositionsOnResize);
+
+
+        let particles = [];
+        let dashRings = [];
+
+        function createParticles(x, y, color, count = 30, speedMultiplier = 1) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, color, speedMultiplier));
+            }
+        }
+
+        function createDashRing(x, y, color) {
+            dashRings.push(new DashRing(x, y, color));
+        }
+
+        // رسم خلفية الشبكة (Grid)
+        function drawGrid() {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.lineWidth = 1;
+            const gridSize = 50;
+
+            // حركة بطيئة للشبكة لتعطي إحساس بالحياة
+            const offset = (Date.now() / 50) % gridSize;
+
+            ctx.beginPath();
+            for (let x = offset; x < width; x += gridSize) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+            }
+            for (let y = offset; y < height; y += gridSize) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+            }
+            ctx.stroke();
+        }
+
+        // التحقق من التصادم
+        function checkCollisions() {
+            if (gameState !== 'PLAYING') return;
+
+            const dist = Math.hypot(player1.x - player2.x, player1.y - player2.y);
+            
+            // إذا تلامس اللاعبان
+            if (dist < player1.radius + player2.radius) {
+                
+                // حالة 1: كلاهما يندفع في نفس الوقت (تصادم ملحمي - ارتداد)
+                if (player1.isDashing && player2.isDashing) {
+                    player1.isDashing = false;
+                    player2.isDashing = false;
+                    player1.dx *= -2; player1.dy *= -2;
+                    player2.dx *= -2; player2.dy *= -2;
+                    createParticles(player1.x + (player2.x - player1.x)/2, player1.y + (player2.y - player1.y)/2, '#ffffff', 40, 2);
+                    screenShakeTime = 10;
+                    return;
+                }
+
+                // حالة 2: اللاعب 1 يندفع ويضرب اللاعب 2
+                if (player1.isDashing && !player2.isDashing) {
+                    endRound(player1, player2);
+                    return;
+                }
+
+                // حالة 3: اللاعب 2 يندفع ويضرب اللاعب 1
+                if (player2.isDashing && !player1.isDashing) {
+                    endRound(player2, player1);
+                    return;
+                }
+
+                // إذا كان مجرد تلامس عادي بدون اندفاع (دفع بسيط)
+                if (!player1.isDashing && !player2.isDashing) {
+                    const overlap = (player1.radius + player2.radius) - dist;
+                    const nx = (player2.x - player1.x) / dist;
+                    const ny = (player2.y - player1.y) / dist;
+                    
+                    player1.x -= nx * overlap / 2;
+                    player1.y -= ny * overlap / 2;
+                    player2.x += nx * overlap / 2;
+                    player2.y += ny * overlap / 2;
+                }
+            }
+        }
+
+        function endRound(winner, loser) {
+            gameState = 'ROUND_OVER';
+            
+            // إضافة نقطة
+            if (winner === player1) score.p1++;
+            else score.p2++;
+            
+            updateScoreUI();
+
+            // تأثيرات الانفجار
+            createParticles(loser.x, loser.y, loser.color, 100, 3);
+            createDashRing(loser.x, loser.y, winner.color);
+            screenShakeTime = 20;
+
+            // إخفاء الخاسر مؤقتاً بنقله خارج الشاشة
+            loser.x = -1000;
+            loser.y = -1000;
+            loser.dx = 0; loser.dy = 0;
+
+            // إظهار واجهة الفوز بالجولة أو المباراة
+            const roundScreen = document.getElementById('round-screen');
+            const winnerText = document.getElementById('winner-text');
+            const subText = roundScreen.querySelector('p');
+            const returnBtn = document.getElementById('return-home-btn');
+
+            if (score.p1 >= targetScore || score.p2 >= targetScore) {
+                winnerText.innerText = `اللقب لـ ${winner.name}! 🏆`;
+                subText.innerText = "تهانينا على الفوز العظيم!";
+                winnerText.style.color = winner.color;
+                winnerText.style.textShadow = `0 0 20px ${winner.color}`;
+                returnBtn.classList.add('visible'); // إظهار زر العودة
+                roundScreen.classList.remove('hidden');
+                
+                // تم إزالة الانتقال التلقائي ليتمكن اللاعب من الضغط على الزر بحرية
+            } else {
+                winnerText.innerText = `فاز ${winner.name} بالجولة!`;
+                subText.innerText = "الجولة التالية تبدأ قريباً...";
+                winnerText.style.color = winner.color;
+                winnerText.style.textShadow = `0 0 20px ${winner.color}`;
+                returnBtn.classList.remove('visible'); // إخفاء الزر في الجولات العادية
+                roundScreen.classList.remove('hidden');
+
+                // بدء جولة جديدة بعد 2.5 ثانية
+                setTimeout(startNewRound, 2500);
+            }
+        }
+
+        // حدث الضغط على زر العودة للرئيسية
+        document.getElementById('return-home-btn').addEventListener('click', () => {
+            document.getElementById('round-screen').classList.add('hidden');
+            document.getElementById('start-screen').classList.remove('hidden');
+            document.getElementById('return-home-btn').classList.remove('visible');
+            gameState = 'START';
+        });
+
+        function updateScoreUI() {
+            document.getElementById('score1').innerText = score.p1;
+            document.getElementById('score2').innerText = score.p2;
+        }
+
+        function startNewRound() {
+            document.getElementById('round-screen').classList.add('hidden');
+            
+            // إعادة ضبط أماكن اللاعبين
+            player1.startX = width - 100; player1.startY = height/2;
+            player2.startX = 100; player2.startY = height/2;
+            
+            player1.reset();
+            player2.reset();
+            particles = [];
+            dashRings = [];
+            
+            gameState = 'PLAYING';
+        }
+
+        function startGame() {
+            // جلب الأسماء وعدد الجولات من المدخلات
+            const p1Name = document.getElementById('p1-name').value.trim() || 'بنفسجي';
+            const p2Name = document.getElementById('p2-name').value.trim() || 'أزرق';
+            targetScore = parseInt(document.getElementById('target-score').value);
+
+            // تحديث أسماء اللاعبين
+            player1.name = p1Name;
+            player2.name = p2Name;
+
+            // تحديث واجهة النتيجة بالأسماء الجديدة
+            document.getElementById('name1-display').innerText = p1Name;
+            document.getElementById('name2-display').innerText = p2Name;
+
+            document.getElementById('start-screen').classList.add('hidden');
+            score = { p1: 0, p2: 0 };
+            updateScoreUI();
+            startNewRound();
+        }
+
+        document.getElementById('start-btn').addEventListener('click', startGame);
+
+        // حلقة اللعبة (Game Loop)
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // مسح الشاشة مع تأثير باهت (لإعطاء تأثير الحركة البسيطة للخلفية)
+            ctx.fillStyle = 'rgba(5, 5, 8, 0.4)';
+            ctx.fillRect(0, 0, width, height);
+
+            // اهتزاز الشاشة (Screen Shake)
+            if (screenShakeTime > 0) {
+                ctx.save();
+                const magnitude = screenShakeTime * 0.5;
+                const dx = (Math.random() - 0.5) * magnitude;
+                const dy = (Math.random() - 0.5) * magnitude;
+                ctx.translate(dx, dy);
+                screenShakeTime--;
+            }
+
+            drawGrid();
+
+            // تحديث ورسم الحلقات البصرية
+            for (let i = dashRings.length - 1; i >= 0; i--) {
+                dashRings[i].update();
+                dashRings[i].draw();
+                if (dashRings[i].life <= 0) dashRings.splice(i, 1);
+            }
+
+            // تحديث ورسم اللاعبين
+            player1.update();
+            player2.update();
+            checkCollisions();
+            player1.draw();
+            player2.draw();
+
+            // تحديث ورسم الجزيئات
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+
+            if (screenShakeTime > 0) {
+                ctx.restore();
+            }
+        }
+
+        // بدء الحلقة
+        animate();
+
+    </script>
+</body>
+</html>
